@@ -1,27 +1,16 @@
 ---
-# apiVersion: v1
-# kind: PersistentVolumeClaim
-# metadata:
-#   name: elastic-storage
-#   annotations:
-#     volume.beta.kubernetes.io/storage-class: gp2
-# spec:
-#   accessModes:
-#   - ReadWriteOnce
-#   resources:
-#     requests:
-#       storage: 2Gi
----
 apiVersion: apps/v1beta1
-kind: Deployment
+kind: StatefulSet
 metadata:
-  name: elasticsearch-master
+  namespace: kube-logging
+  name: elasticsearch
 spec:
-  replicas: 3
   selector:
     matchLabels:
       component: elasticsearch
       role: master
+  replicas: 3
+  serviceName: elasticsearch
   template:
     metadata:
       labels:
@@ -40,13 +29,15 @@ spec:
           privileged: true
       containers:
       - name: elasticsearch
+        securityContext:
+          capabilities:
+            add:
+              - IPC_LOCK
         image: rolindroy/elasticsearch:6.6.0
         imagePullPolicy: Always
         securityContext:
           runAsUser: 1000
         command: [ "bin/elasticsearch" ]
-        # command: [ "/bin/bash", "-c", "--" ]
-        # args: [ "while true; do sleep 30; done;" ]
         env:
         - name: CLUSTER_NAME
           value: "Production Cluster"
@@ -82,10 +73,17 @@ spec:
           name: http
         - containerPort: 9300
           name: transport
-      #   volumeMounts:
-      #   - mountPath: /data
-      #     name: elastic-storage
-      # volumes:
-      #   - name: elastic-storage
-      #     persistentVolumeClaim:
-      #       claimName: elastic-storage
+        volumeMounts:
+        - mountPath: /data
+          name: data
+  updateStrategy:
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      storageClassName: gp2
+      accessModes: [ ReadWriteOnce ]
+      resources:
+        requests:
+          storage: 2Gi
